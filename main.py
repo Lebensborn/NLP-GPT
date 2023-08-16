@@ -1,19 +1,11 @@
 import pandas as pd
 import numpy as np
+import re
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.decomposition import NMF
-from sklearn.feature_extraction import text
-
-from nltk.corpus import stopwords
 from nltk import word_tokenize, pos_tag
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus import stopwords
-import nltk
-import gensim.downloader as api
-from nltk.corpus import stopwords
-
-import re
-import string
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 from wordcloud import WordCloud
@@ -64,10 +56,12 @@ def nouns(abstract):
 # Create dataframe of only nouns from speeches
 data_nouns = pd.DataFrame(df.abstract.apply(nouns))
 
-stop_noun = ['ai', 'intelligence', 'research', 'technology', 'learning', 'machine', 'technique', 'article',
-             'development', 'paper', 'application', 'method', 'deep', 'algorithm', 'problem', 'model']
+stop_noun = ['ai', 'artificial', 'intelligence', 'research', 'technology', 'learning', 'machine', 'technique',
+             'article', 'development', 'paper', 'application', 'method', 'deep', 'algorithm', 'problem', 'model',
+             'approach', 'data', 'set', 'science', 'industry', 'ml', 'dl', 'field', 'use', 'study', 'analysis',
+             'amp', 'gt', 'lt', 'us', 'nan', 'x0d']
 # Store TF-IDF Vectorizer
-tv_noun = TfidfVectorizer(stop_words=stopwords.words('english') + stop_noun, ngram_range=(1, 1), max_df=.8, min_df=.01)
+tv_noun = TfidfVectorizer(stop_words=stopwords.words('english') + stop_noun, ngram_range=(1, 2), max_df=.8, min_df=.01)
 # Fit and Transform speech noun text to a TF-IDF Doc-Term Matrix
 data_tv_noun = tv_noun.fit_transform(data_nouns.abstract)
 # Create data-frame of Doc-Term Matrix with nouns as column names
@@ -79,18 +73,33 @@ data_dtm_noun.head()
 
 
 def display_topics(model, feature_names, num_top_words, topic_names=None):
-    # iterate through topics in topic-term matrix, 'H' aka
-    # model.components_
     for ix, topic in enumerate(model.components_):
-        # print topic, topic number, and top words
+        # 首先，为每个主题获取最重要的词汇
+        topic_words = [(feature_names[i], topic[i]) for i in topic.argsort()[:-num_top_words * 2 - 1:-1]]
+
+        # 移除出现在复合词中的单词
+        to_remove = set()
+        for word, _ in topic_words:
+            if " " in word:  # 复合词
+                components = word.split()
+                for comp in components:
+                    to_remove.add(comp)
+
+        # 只保存那些没有被标记为移除的单词
+        topic_words = [(word, importance) for word, importance in topic_words if word not in to_remove]
+
+        # 最后，为了确保输出的单词数量，我们再次筛选
+        top_words = sorted(topic_words, key=lambda x: x[1], reverse=True)[:num_top_words]
+        words = [word for word, _ in top_words]
+
         if not topic_names or not topic_names[ix]:
             print("\nTopic ", ix)
         else:
             print("\nTopic: '", topic_names[ix], "'")
-        print(", ".join([feature_names[i] for i in topic.argsort()[:-num_top_words - 1:-1]]))
+        print(", ".join(words))
 
 
-nmf_model = NMF(14)
+nmf_model = NMF(15)
 # Learn an NMF model for given Document Term Matrix 'V'
 # Extract the document-topic matrix 'W'
 doc_topic = nmf_model.fit_transform(data_dtm_noun)
@@ -98,7 +107,7 @@ doc_topic = nmf_model.fit_transform(data_dtm_noun)
 display_topics(nmf_model, tv_noun.get_feature_names_out(), 5)
 
 
-# # 1. 话题分布的可视化
+# # 话题分布的可视化
 # def plot_topic_distribution(doc_topic):
 #     topic_dist = doc_topic.sum(axis=0)
 #     plt.bar(range(len(topic_dist)), topic_dist)
@@ -107,49 +116,9 @@ display_topics(nmf_model, tv_noun.get_feature_names_out(), 5)
 #     plt.ylabel("Number of Documents")
 #     plt.show()
 #
-#
-# plot_topic_distribution(doc_topic)
-# # 使用肘部法则来确定最佳话题数量
-# def find_optimal_topics(data_dtm, n_topics_range):
-#     errors = []
-#     for n_topics in n_topics_range:
-#         nmf_model = NMF(n_topics)
-#         nmf_model.fit(data_dtm)
-#         # 通常，NMF的误差可以通过模型的reconstruction_err_属性获得
-#         error = nmf_model.reconstruction_err_
-#         errors.append(error)
-#
-#     return errors
-#
-# # 设定话题数量范围，如从2到20
-# n_topics_range = range(2, 21)
-# errors = find_optimal_topics(data_dtm_noun, n_topics_range)
 
-# # 可视化肘部法则
-# def plot_elbow(n_topics_range, errors):
-#     plt.figure()
-#     plt.plot(n_topics_range, errors, marker='o')
-#     plt.title('Elbow Method for Optimal Topics')
-#     plt.xlabel('Number of Topics')
-#     plt.ylabel('Reconstruction Error')
-#     plt.grid(True)
-#     plt.show()
-#
-#
-# plot_elbow(n_topics_range, errors)
 
-# 2. 使用t-SNE对文档-话题矩阵进行降维，并在二维空间中可视化
-# def visualize_docs_tsne(doc_topic):
-#     tsne = TSNE(n_components=2, random_state=42)
-#     tsne_embedding = tsne.fit_transform(doc_topic)
-#
-#     plt.figure(figsize=(10, 10))
-#     plt.scatter(tsne_embedding[:, 0], tsne_embedding[:, 1])
-#     plt.title("t-SNE visualization of documents")
-#     plt.show()
-#
-#
-# visualize_docs_tsne(doc_topic)
+# 使用t-SNE对文档-话题矩阵进行降维，并在二维空间中可视化
 def visualize_docs_tsne_colored(doc_topic):
     # 使用t-SNE对文档-话题矩阵进行降维
     tsne = TSNE(n_components=2, random_state=42)
@@ -178,8 +147,25 @@ visualize_docs_tsne_colored(doc_topic)
 # 3. 为每个话题创建词云
 def display_wordclouds(model, feature_names, num_top_words):
     for ix, topic in enumerate(model.components_):
+        # 首先，为每个主题获取最重要的词汇。
+        topic_words = [(feature_names[i], topic[i]) for i in topic.argsort()[:-num_top_words * 2 - 1:-1]]
+
+        # 移除出现在复合词中的单词
+        to_remove = set()
+        for word, _ in topic_words:
+            if " " in word:  # 复合词
+                components = word.split()
+                for comp in components:
+                    to_remove.add(comp)
+
+        # 只保存那些没有被标记为移除的单词
+        topic_words = [(word, importance) for word, importance in topic_words if word not in to_remove]
+
+        # 最后，为了确保单词数量，我们再次筛选
+        top_words = sorted(topic_words, key=lambda x: x[1], reverse=True)[:num_top_words]
+        word_dict = {word: importance for word, importance in top_words}
+
         wc = WordCloud(background_color="white", max_words=num_top_words)
-        word_dict = {feature_names[i]: topic[i] for i in topic.argsort()[:-num_top_words - 1:-1]}
         wc.generate_from_frequencies(word_dict)
         plt.figure()
         plt.imshow(wc, interpolation="bilinear")
