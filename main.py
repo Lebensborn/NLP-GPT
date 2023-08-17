@@ -1,12 +1,13 @@
-import pandas as pd
-import numpy as np
 import re
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.decomposition import NMF
-from nltk import word_tokenize, pos_tag
-from nltk.stem import WordNetLemmatizer
-from nltk.corpus import stopwords
+
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from nltk import word_tokenize, pos_tag
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+from sklearn.decomposition import NMF
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.manifold import TSNE
 from wordcloud import WordCloud
 
@@ -59,7 +60,9 @@ data_nouns = pd.DataFrame(df.abstract.apply(nouns))
 stop_noun = ['ai', 'artificial', 'intelligence', 'research', 'technology', 'learning', 'machine', 'technique',
              'article', 'development', 'paper', 'application', 'method', 'deep', 'algorithm', 'problem', 'model',
              'approach', 'data', 'set', 'science', 'industry', 'ml', 'dl', 'field', 'use', 'study', 'analysis',
-             'amp', 'gt', 'lt', 'us', 'nan', 'x0d']
+             'amp', 'gt', 'lt', 'us', 'nan', 'x0d', 'concept', 'task', 'issue', 'computer', 'knowledge', 'management',
+             'information', 'author', 'solution', 'design', 'performance', 'result', 'search', 'function', 'process',
+             'impact', 'challenge', 'review', 'agent']
 # Store TF-IDF Vectorizer
 tv_noun = TfidfVectorizer(stop_words=stopwords.words('english') + stop_noun, ngram_range=(1, 2), max_df=.8, min_df=.01)
 # Fit and Transform speech noun text to a TF-IDF Doc-Term Matrix
@@ -74,16 +77,23 @@ data_dtm_noun.head()
 
 def display_topics(model, feature_names, num_top_words, topic_names=None):
     for ix, topic in enumerate(model.components_):
-        # 首先，为每个主题获取最重要的词汇
-        topic_words = [(feature_names[i], topic[i]) for i in topic.argsort()[:-num_top_words * 2 - 1:-1]]
+        topic_words = [(feature_names[i], topic[i]) for i in topic.argsort()[:-num_top_words * 3 - 1:-1]]
 
-        # 移除出现在复合词中的单词
+        # Check for duplicates and sub-strings in bigrams
         to_remove = set()
-        for word, _ in topic_words:
-            if " " in word:  # 复合词
-                components = word.split()
-                for comp in components:
-                    to_remove.add(comp)
+        for i, (word_i, _) in enumerate(topic_words):
+            components_i = word_i.split()
+
+            # remove exact duplicates like "system system"
+            if len(components_i) == 2 and components_i[0] == components_i[1]:
+                to_remove.add(word_i)
+                continue
+
+            for j, (word_j, _) in enumerate(topic_words):
+                if i != j:
+                    if len(components_i) == 1 and word_i in word_j:
+                        # if word_i is a substring of word_j and word_i is not a bigram, then word_i should be removed
+                        to_remove.add(word_i)
 
         # 只保存那些没有被标记为移除的单词
         topic_words = [(word, importance) for word, importance in topic_words if word not in to_remove]
@@ -99,7 +109,8 @@ def display_topics(model, feature_names, num_top_words, topic_names=None):
         print(", ".join(words))
 
 
-nmf_model = NMF(15)
+
+nmf_model = NMF(14)
 # Learn an NMF model for given Document Term Matrix 'V'
 # Extract the document-topic matrix 'W'
 doc_topic = nmf_model.fit_transform(data_dtm_noun)
@@ -147,21 +158,28 @@ visualize_docs_tsne_colored(doc_topic)
 # 3. 为每个话题创建词云
 def display_wordclouds(model, feature_names, num_top_words):
     for ix, topic in enumerate(model.components_):
-        # 首先，为每个主题获取最重要的词汇。
-        topic_words = [(feature_names[i], topic[i]) for i in topic.argsort()[:-num_top_words * 2 - 1:-1]]
+        topic_words = [(feature_names[i], topic[i]) for i in topic.argsort()[:-num_top_words * 3 - 1:-1]]
 
-        # 移除出现在复合词中的单词
+        # Check for duplicates and sub-strings in bigrams
         to_remove = set()
-        for word, _ in topic_words:
-            if " " in word:  # 复合词
-                components = word.split()
-                for comp in components:
-                    to_remove.add(comp)
+        for i, (word_i, _) in enumerate(topic_words):
+            components_i = word_i.split()
+
+            # remove exact duplicates like "system system"
+            if len(components_i) == 2 and components_i[0] == components_i[1]:
+                to_remove.add(word_i)
+                continue
+
+            for j, (word_j, _) in enumerate(topic_words):
+                if i != j:
+                    if len(components_i) == 1 and word_i in word_j:
+                        # if word_i is a substring of word_j and word_i is not a bigram, then word_i should be removed
+                        to_remove.add(word_i)
 
         # 只保存那些没有被标记为移除的单词
         topic_words = [(word, importance) for word, importance in topic_words if word not in to_remove]
 
-        # 最后，为了确保单词数量，我们再次筛选
+        # 为了确保单词数量，我们再次筛选
         top_words = sorted(topic_words, key=lambda x: x[1], reverse=True)[:num_top_words]
         word_dict = {word: importance for word, importance in top_words}
 
