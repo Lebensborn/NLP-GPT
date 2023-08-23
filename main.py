@@ -10,6 +10,9 @@ from sklearn.decomposition import NMF
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.manifold import TSNE
 from wordcloud import WordCloud
+from octis.evaluation_metrics.coherence_metrics import Coherence
+import gensim
+from gensim.models import CoherenceModel
 
 # alter the width for inspection
 pd.set_option('max_colwidth', 150)
@@ -17,7 +20,7 @@ pd.set_option('max_colwidth', 150)
 df = pd.read_json('10000_ai_ml_dp_nlp.json')
 
 # select main indexes
-df = df[['title', 'abstract']]
+df = df[['title', 'abstract', '_id']]
 # set index to title
 df = df.set_index('title')
 
@@ -62,7 +65,7 @@ stop_noun = ['ai', 'artificial', 'intelligence', 'research', 'technology', 'lear
              'approach', 'data', 'set', 'science', 'industry', 'ml', 'dl', 'field', 'use', 'study', 'analysis',
              'amp', 'gt', 'lt', 'us', 'nan', 'x0d', 'concept', 'task', 'issue', 'computer', 'knowledge', 'management',
              'information', 'author', 'solution', 'design', 'performance', 'result', 'search', 'function', 'process',
-             'impact', 'challenge', 'review', 'agent']
+             'impact', 'challenge', 'review', 'agent', 'framework']
 # Store TF-IDF Vectorizer
 tv_noun = TfidfVectorizer(stop_words=stopwords.words('english') + stop_noun, ngram_range=(1, 2), max_df=.8, min_df=.01)
 # Fit and Transform speech noun text to a TF-IDF Doc-Term Matrix
@@ -109,24 +112,12 @@ def display_topics(model, feature_names, num_top_words, topic_names=None):
         print(", ".join(words))
 
 
-
-nmf_model = NMF(14)
+nmf_model = NMF(13)
 # Learn an NMF model for given Document Term Matrix 'V'
 # Extract the document-topic matrix 'W'
 doc_topic = nmf_model.fit_transform(data_dtm_noun)
 # Extract top words from the topic-term matrix 'H'
 display_topics(nmf_model, tv_noun.get_feature_names_out(), 5)
-
-
-# # 话题分布的可视化
-# def plot_topic_distribution(doc_topic):
-#     topic_dist = doc_topic.sum(axis=0)
-#     plt.bar(range(len(topic_dist)), topic_dist)
-#     plt.title("Topic Distribution")
-#     plt.xlabel("Topic Index")
-#     plt.ylabel("Number of Documents")
-#     plt.show()
-#
 
 
 # 使用t-SNE对文档-话题矩阵进行降维，并在二维空间中可视化
@@ -193,3 +184,60 @@ def display_wordclouds(model, feature_names, num_top_words):
 
 
 display_wordclouds(nmf_model, tv_noun.get_feature_names_out(), 10)
+
+
+def topic_to_keywords(model, feature_names, num_top_words):
+    topic_map = {}
+    for ix, topic in enumerate(model.components_):
+        topic_words = [(feature_names[i], topic[i]) for i in topic.argsort()[:-num_top_words * 3 - 1:-1]]
+
+        # Check for duplicates and sub-strings in bigrams
+        to_remove = set()
+        for i, (word_i, _) in enumerate(topic_words):
+            components_i = word_i.split()
+
+            # remove exact duplicates like "system system"
+            if len(components_i) == 2 and components_i[0] == components_i[1]:
+                to_remove.add(word_i)
+                continue
+
+            for j, (word_j, _) in enumerate(topic_words):
+                if i != j:
+                    if len(components_i) == 1 and word_i in word_j:
+                        # if word_i is a substring of word_j and word_i is not a bigram, then word_i should be removed
+                        to_remove.add(word_i)
+
+        # 只保存那些没有被标记为移除的单词
+        topic_words = [(word, importance) for word, importance in topic_words if word not in to_remove]
+
+        # 最后，为了确保输出的单词数量，我们再次筛选
+        top_words = sorted(topic_words, key=lambda x: x[1], reverse=True)[:num_top_words]
+        words = [word for word, _ in top_words]
+        topic_map[ix] = ' - '.join(words)
+    return topic_map
+
+
+#
+#
+# topic_keywords_map = topic_to_keywords(nmf_model, tv_noun.get_feature_names_out(), 10)
+# df['dominant_topic'] = np.argmax(doc_topic, axis=1)
+# df['dominant_topic_keywords'] = df['dominant_topic'].apply(lambda x: topic_keywords_map[x])
+# df_out = df.reset_index()[['_id', 'dominant_topic_keywords']]
+# df_out.columns = ['_id', 'topic']
+# df_out.to_csv('topics_output.csv', index=False)
+
+
+df['dominant_topic'] = np.argmax(doc_topic, axis=1)
+topic_counts = df['dominant_topic'].value_counts().reset_index()
+topic_counts.columns = ['Topic', 'Num_Documents']
+topic_keywords_map = topic_to_keywords(nmf_model, tv_noun.get_feature_names_out(), 5)
+topic_counts['Topic_Keywords'] = topic_counts['Topic'].apply(lambda x: topic_keywords_map[x])
+
+# 绘制条形图
+plt.figure(figsize=(15, 10))
+plt.barh(topic_counts['Topic_Keywords'], topic_counts['Num_Documents'], color='skyblue')
+plt.xlabel('Number of Documents', fontsize=14)
+plt.ylabel('Topics', fontsize=14)
+plt.title('Number of Documents per Topic', fontsize=16)
+plt.gca().invert_yaxis()  # 这样第一个话题将会在顶部显示
+plt.show()
