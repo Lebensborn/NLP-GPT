@@ -10,9 +10,6 @@ from sklearn.decomposition import NMF
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.manifold import TSNE
 from wordcloud import WordCloud
-from octis.evaluation_metrics.coherence_metrics import Coherence
-import gensim
-from gensim.models import CoherenceModel
 
 # alter the width for inspection
 pd.set_option('max_colwidth', 150)
