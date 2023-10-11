@@ -1,5 +1,5 @@
 import re
-
+import ijson
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -14,7 +14,14 @@ from wordcloud import WordCloud
 # alter the width for inspection
 pd.set_option('max_colwidth', 150)
 # read json into dataframe
-df = pd.read_json('10000_ai_ml_dp_nlp.json')
+with open('artificial_intelligence.json', 'r', encoding='utf-8') as f:
+    # Assuming your json structure is a list of objects
+    items = ijson.items(f, 'item')
+    rows = list(items)
+
+# Convert the extracted data to a pandas DataFrame
+df = pd.DataFrame(rows)
+# df = pd.read_json('artificial_intelligence.json')
 
 # select main indexes
 df = df[['title', 'abstract', '_id']]
@@ -57,14 +64,37 @@ def nouns(abstract):
 # Create dataframe of only nouns from speeches
 data_nouns = pd.DataFrame(df.abstract.apply(nouns))
 
-stop_noun = ['ai', 'artificial', 'intelligence', 'research', 'technology', 'learning', 'machine', 'technique',
-             'article', 'development', 'paper', 'application', 'method', 'deep', 'algorithm', 'problem', 'model',
-             'approach', 'data', 'set', 'science', 'industry', 'ml', 'dl', 'field', 'use', 'study', 'analysis',
-             'amp', 'gt', 'lt', 'us', 'nan', 'x0d', 'concept', 'task', 'issue', 'computer', 'knowledge', 'management',
-             'information', 'author', 'solution', 'design', 'performance', 'result', 'search', 'function', 'process',
-             'impact', 'challenge', 'review', 'agent', 'framework']
+stop_noun = [
+    "evolutionary", "program", "strategy", "vector", "number", "chapter", "theory", 'image',
+    'fuzzy', 'computer', "agent", "function", "noise", "sample", "layer", "optimization",
+    "solution", "optimal", 'parameter', 'predict', 'forecast', 'cluster', 'datasets', 'classifier',
+    'label', 'class', 'test', 'training', 'case', 'level', 'give', 'focus', 'real', 'however',
+    'review', 'need', 'various', 'many', 'solve', 'analyze', 'human', 'include',
+    'dataset', 'feature', 'performance', 'approach', 'accuracy', 'development', 'information',
+    'also', 'time', 'show', 'provide', 'task', 'make', 'performance', 'approach',
+    'information', 'knowledge', 'user', 'feature', "propose", "process", 'improve',
+    'design', 'recognition', 'train', 'compare', 'field', 'apply', 'develop', 'improve', 'review'
+                                                                                         "include", "technology",
+    "technique", "research", "analysis", "present", "work",
+    'learning', 'paper', 'machine', 'learn', 'artificial', 'intelligence', 'language',
+    'intelligent', 'deep', 'base', 'neural', 'network', 'model', "framework", "information"
+                                                                              'approach', 'result', 'use', 'method',
+    'algorithm', 'application',
+    'prediction', 'classification', 'natural', 'conference', 'article', 'data',
+    'conclusion', 'objective', 'abstract', 'background', 'author', 'disclosure', 'title',
+    "a", "an", "the", "in", "on", "at", "from", "to", "with", "over", "under",
+    "and", "but", "or", "so", "nor", "for", "yet", "i", "you", "he", "she",
+    "it", "we", "they", "me", "him", "her", "us", "them", 'purpose', 'base'
+                                                                     "is", "am", "are", "was", "were", "be", "been",
+    "being",
+    "have", "has", "had", "do", "does", "did", "will", "shall",
+    "can", "could", "would", "should", "may", "might", "must", "ought", "that",
+    "this", "these", "those", "how", "what", "why", "by", "their", "of", "as", "there",
+    "within", "which",
+    # Add more stop words here if needed
+]
 # Store TF-IDF Vectorizer
-tv_noun = TfidfVectorizer(stop_words=stopwords.words('english') + stop_noun, ngram_range=(1, 2), max_df=.8, min_df=.01)
+tv_noun = TfidfVectorizer(stop_words=stopwords.words('english') + stop_noun, ngram_range=(1, 1), max_df=.8, min_df=.01)
 # Fit and Transform speech noun text to a TF-IDF Doc-Term Matrix
 data_tv_noun = tv_noun.fit_transform(data_nouns.abstract)
 # Create data-frame of Doc-Term Matrix with nouns as column names
@@ -109,7 +139,7 @@ def display_topics(model, feature_names, num_top_words, topic_names=None):
         print(", ".join(words))
 
 
-nmf_model = NMF(13)
+nmf_model = NMF(30)
 # Learn an NMF model for given Document Term Matrix 'V'
 # Extract the document-topic matrix 'W'
 doc_topic = nmf_model.fit_transform(data_dtm_noun)
